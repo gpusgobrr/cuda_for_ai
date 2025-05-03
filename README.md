@@ -1,2 +1,2 @@
-# triton_kernels
-Writing some triton kernels
+# CUDA FOR AI
+Practice writing some cuda kernels

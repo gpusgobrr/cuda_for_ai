@@ -9,24 +9,29 @@
 #include "basic_softmax.cuh"
 
 // CUDA kernel for softmax operation
-__global__ void basic_softmax_kernel(float* input, float* output, const int batch_size, const int num_elements) {
+__global__ void basic_softmax_kernel(float *input, float *output, const int batch_size, const int num_elements)
+{
     // Calculate global thread ID
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     // Each thread processes one row (one sample in the batch)
-    if (tid < batch_size) {
+    if (tid < batch_size)
+    {
         // Find max value in the row (for numerical stability)
         float max_val = -INFINITY;
-        for (int i = 0; i < num_elements; ++i) {
+        for (int i = 0; i < num_elements; ++i)
+        {
             int idx = tid * num_elements + i;
-            if (input[idx] > max_val) {
+            if (input[idx] > max_val)
+            {
                 max_val = input[idx];
             }
         }
 
         // Compute exponentials and sum
         float sum = 0.0f;
-        for (int i = 0; i < num_elements; ++i) {
+        for (int i = 0; i < num_elements; ++i)
+        {
             int idx = tid * num_elements + i;
             // Subtract max for numerical stability before exp
             output[idx] = expf(input[idx] - max_val);
@@ -34,7 +39,8 @@ __global__ void basic_softmax_kernel(float* input, float* output, const int batc
         }
 
         // Normalize to get softmax values
-        for (int i = 0; i < num_elements; ++i) {
+        for (int i = 0; i < num_elements; ++i)
+        {
             int idx = tid * num_elements + i;
             output[idx] /= sum;
         }
@@ -42,7 +48,8 @@ __global__ void basic_softmax_kernel(float* input, float* output, const int batc
 }
 
 // Host function to launch the kernel with PyTorch tensors
-torch::Tensor basic_softmax(const torch::Tensor& input) {
+torch::Tensor basic_softmax(const torch::Tensor &input)
+{
     auto output = torch::empty_like(input);
     // Make sure tensors are on CUDA
     TORCH_CHECK(input.device().is_cuda(), "Input tensor must be on CUDA device");
@@ -53,18 +60,18 @@ torch::Tensor basic_softmax(const torch::Tensor& input) {
     // Extract dimensions
     TORCH_CHECK(input.dim() == 2, "Input tensor must be 2D (batch_size × num_elements)");
     const int batch_size = static_cast<int>(input.size(0));
-    const int num_elements = static_cast<int>(input.size(1));
+    const int sequence_length = static_cast<int>(input.size(1));
 
     // Get raw pointers to the tensor data
     const auto d_input = input.data_ptr<float>();
     const auto d_output = output.data_ptr<float>();
 
     // Calculate grid and block dimensions
-    size_t threads = (num_elements >= 1024) ? 1024 : (1 << static_cast<int>(log2f64(num_elements)));
+    size_t threads = (sequence_length >= 1024) ? 1024 : (1 << static_cast<int>(log2f64(sequence_length)));
     size_t blocks_per_grid = (batch_size + threads - 1) / threads;
 
     // Launch the kernel
-    basic_softmax_kernel<<<blocks_per_grid, threads>>>(d_input, d_output, batch_size, num_elements);
+    basic_softmax_kernel<<<blocks_per_grid, threads>>>(d_input, d_output, batch_size, sequence_length);
 
     return output;
 }

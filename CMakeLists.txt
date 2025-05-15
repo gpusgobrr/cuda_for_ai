@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 message(STATUS "CMake version: ${CMAKE_VERSION}")
 
 project(cuda_for_ai)
+set(CMAKE_CUDA_ARCHITECTURES 89)
 
 file(GLOB gpu_source_files "${CMAKE_SOURCE_DIR}/src/*/*.cu")
 file(GLOB header_files "${CMAKE_SOURCE_DIR}/src/*/*.cuh")
@@ -24,6 +25,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 # tests
 add_executable(test_softmax ${CMAKE_SOURCE_DIR}/src/tests/test_softmax.cpp ${test_import_files} ${gpu_source_files})
 target_link_libraries(test_softmax "${TORCH_LIBRARIES}")
+
+add_executable(test_row_reductions ${CMAKE_SOURCE_DIR}/src/tests/test_row_reductions.cpp ${test_import_files} ${gpu_source_files})
+target_link_libraries(test_row_reductions "${TORCH_LIBRARIES}")
 
 add_executable(test_cuda_capabilities ${CMAKE_SOURCE_DIR}/src/tests/test_cuda_capabilities.cpp ${test_import_files} ${gpu_source_files})
 target_link_libraries(test_cuda_capabilities "${TORCH_LIBRARIES}")

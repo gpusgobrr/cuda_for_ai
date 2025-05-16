@@ -8,20 +8,31 @@ __global__ void row_max_kernel(float *input, float *output, const int batch_size
     extern __shared__ float shared_data[]; // Shared memory for intermediate results
     int row = blockIdx.x; // Each block processes one row
     int tid = threadIdx.x;
-    // printf("-------- Row: %d, Thread: %d --------- \n", row, tid);
+
     if (row < batch_size) {
-        // Load row into shared memory
+        // Each thread finds max of its assigned elements
         float max_val = -INFINITY;
-        for (int i = tid; i < num_elements; i += 1) {
-            shared_data[i] = input[row * num_elements + i];
-            max_val = fmaxf(max_val, shared_data[i]);
-            // printf("Row: %d, Thread: %d, Value: %f\n", row, tid, shared_data[i]);
+        for (int i = tid; i < num_elements; i += blockDim.x) {
+            float val = input[row * num_elements + i];
+            max_val = fmaxf(max_val, val);
         }
+
+        // Store local max in shared memory
+        shared_data[tid] = max_val;
         __syncthreads();
 
-        // printf("Row: %d, Thread: %d, Max Value: %f\n", row, tid, max_val);
-        output[row] = max_val;
+        // Parallel reduction to find global max
+        for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                shared_data[tid] = fmaxf(shared_data[tid], shared_data[tid + stride]);
+            }
+            __syncthreads();
+        }
 
+        // Thread 0 writes the final result
+        if (tid == 0) {
+            output[row] = shared_data[0];
+        }
     }
 }
 

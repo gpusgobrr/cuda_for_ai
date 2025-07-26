@@ -2,6 +2,9 @@ import os
 from typing import Tuple
 import torch
 from torch.utils.cpp_extension import load_inline
+from reference_implementations.triton_fused_softmax import (
+    fused_softmax as triton_fused_softmax_kernel,
+)
 from loguru import logger
 import triton
 import triton.testing
@@ -96,19 +99,19 @@ torch_softmax_scripted = torch.jit.script(
             "batch_size",
             "sequence_length",
         ],  # Argument names to use as an x-axis for the plot.
-        x_vals=[(2**i, 2**j) for i, j in zip(range(2, 12, 1), range(2, 26, 2))],
+        x_vals=[(2**i, 2**j) for i, j in zip(range(2, 14, 1), range(2, 16, 1))],
         # Different possible values for `x_name`.
         x_log=True,  # x axis is logarithmic.
         line_arg="provider",  # Argument name whose value corresponds to a different line in the plot.
         line_vals=[
             "basic_softmax_cuda",
-            "shmem_softmax_cuda",
+            "triton_fused_softmax",
             "torch",
             "torch_scripted",
         ],  # Possible values for `line_arg`.
         line_names=[
             "basic_softmax_cuda",
-            "shmem_softmax_cuda",
+            "triton_fused_softmax",
             "torch",
             "torch_scripted",
         ],  # Label name for the lines.
@@ -131,9 +134,9 @@ def benchmark(batch_size, sequence_length, provider):
             lambda: basic_softmax_cuda.basic_softmax(input_tensor),
             quantiles=quantiles,
         )
-    if provider == "shmem_softmax_cuda":
+    if provider == "triton_fused_softmax":
         ms, min_ms, max_ms = triton.testing.do_bench(
-            lambda: shmem_softmax_cuda.shmem_softmax(input_tensor),
+            lambda: triton_fused_softmax_kernel(input_tensor),
             quantiles=quantiles,
         )
     if provider == "torch":

@@ -61,70 +61,70 @@ def create_extension(kernel_name: str, file_name: Optional[str] = None):
     return extension
 
 
-# @triton.jit
-# def row_max_kernel_optimized(
-#     input_ptr,
-#     output_ptr,
-#     batch_size,
-#     sequence_length,
-#     BLOCK_SIZE: tl.constexpr,
-# ):
-#     """
-#     Optimized version that processes multiple elements per thread
-#     for better performance on very long sequences.
-#     """
-#     row_idx = tl.program_id(0)
+@triton.jit
+def row_max_kernel_optimized(
+    input_ptr,
+    output_ptr,
+    batch_size,
+    sequence_length,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """
+    Optimized version that processes multiple elements per thread
+    for better performance on very long sequences.
+    """
+    row_idx = tl.program_id(0)
 
-#     if row_idx >= batch_size:
-#         return
+    if row_idx >= batch_size:
+        return
 
-#     row_start_ptr = input_ptr + row_idx * sequence_length
-#     max_val = float("-inf")
+    row_start_ptr = input_ptr + row_idx * sequence_length
+    max_val = float("-inf")
 
-#     # Process larger chunks - each thread handles multiple BLOCK_SIZE chunks
-#     num_blocks = tl.cdiv(sequence_length, BLOCK_SIZE)
+    # Process larger chunks - each thread handles multiple BLOCK_SIZE chunks
+    num_blocks = tl.cdiv(sequence_length, BLOCK_SIZE)
 
-#     for block_idx in range(num_blocks):
-#         block_start = block_idx * BLOCK_SIZE
-#         offsets = block_start + tl.arange(0, BLOCK_SIZE)
-#         mask = offsets < sequence_length
+    for block_idx in range(num_blocks):
+        block_start = block_idx * BLOCK_SIZE
+        offsets = block_start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < sequence_length
 
-#         # Load and process block
-#         block_data = tl.load(row_start_ptr + offsets, mask=mask, other=float("-inf"))
-#         block_max = tl.max(block_data)
-#         max_val = tl.maximum(max_val, block_max)
+        # Load and process block
+        block_data = tl.load(row_start_ptr + offsets, mask=mask, other=float("-inf"))
+        block_max = tl.max(block_data)
+        max_val = tl.maximum(max_val, block_max)
 
-#     tl.store(output_ptr + row_idx, max_val)
+    tl.store(output_ptr + row_idx, max_val)
 
 
-# def row_max_triton_optimized(input_tensor: torch.Tensor) -> torch.Tensor:
-#     """
-#     Optimized version for very long sequences.
-#     """
-#     assert input_tensor.dim() == 2, "Input must be 2D tensor"
-#     assert input_tensor.is_cuda, "Input tensor must be on CUDA device"
-#     assert input_tensor.dtype == torch.float32, "Input tensor must be float32"
-#     assert input_tensor.is_contiguous(), "Input tensor must be contiguous"
+def row_max_triton_optimized(input_tensor: torch.Tensor) -> torch.Tensor:
+    """
+    Optimized version for very long sequences.
+    """
+    assert input_tensor.dim() == 2, "Input must be 2D tensor"
+    assert input_tensor.is_cuda, "Input tensor must be on CUDA device"
+    assert input_tensor.dtype == torch.float32, "Input tensor must be float32"
+    assert input_tensor.is_contiguous(), "Input tensor must be contiguous"
 
-#     batch_size, sequence_length = input_tensor.shape
-#     output = torch.empty(
-#         (batch_size,), device=input_tensor.device, dtype=input_tensor.dtype
-#     )
+    batch_size, sequence_length = input_tensor.shape
+    output = torch.empty(
+        (batch_size,), device=input_tensor.device, dtype=input_tensor.dtype
+    )
 
-#     # Use larger block size for better vectorization
-#     BLOCK_SIZE = min(1024, triton.next_power_of_2(sequence_length))
+    # Use larger block size for better vectorization
+    BLOCK_SIZE = min(1024, triton.next_power_of_2(sequence_length))
 
-#     grid = (batch_size,)
+    grid = (batch_size,)
 
-#     row_max_kernel_optimized[grid](
-#         input_tensor,
-#         output,
-#         batch_size,
-#         sequence_length,
-#         BLOCK_SIZE=BLOCK_SIZE,
-#     )
+    row_max_kernel_optimized[grid](
+        input_tensor,
+        output,
+        batch_size,
+        sequence_length,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
 
-#     return output
+    return output
 
 
 def get_inputs(batch_size: int, sequence_length: int):
@@ -173,19 +173,19 @@ def memory_throughput_gbps(batch_size, sequence_length, time_ms):
             "cuda_row_max",
             "torch",
             "torch_scripted",
-            # "triton_row_max",
+            "triton_row_max",
         ],  # Possible values for `line_arg`.
         line_names=[
             "cuda_row_max",
             "torch",
             "torch_scripted",
-            # "triton_row_max",
+            "triton_row_max",
         ],  # Label name for the lines.
         styles=[
             ("blue", "-"),
             ("green", "-."),
             ("red", "--"),
-            # ("orange", ":"),
+            ("orange", ":"),
         ],  # Line styles.
         ylabel="GB/s",  # Label name for the y-axis.
         plot_name="performance",  # Name for the plot. Used also as a file name for saving the plot.
@@ -211,11 +211,11 @@ def benchmark(batch_size, sequence_length, provider):
             lambda: torch_row_max_scripted(input_tensor),
             quantiles=quantiles,
         )
-    # if provider == "triton_row_max":
-    #     ms, min_ms, max_ms = triton.testing.do_bench(
-    #         lambda: row_max_triton_optimized(input_tensor),
-    #         quantiles=quantiles,
-    #     )
+    if provider == "triton_row_max":
+        ms, min_ms, max_ms = triton.testing.do_bench(
+            lambda: row_max_triton_optimized(input_tensor),
+            quantiles=quantiles,
+        )
     gbps = lambda ms: memory_throughput_gbps(
         batch_size=batch_size, sequence_length=sequence_length, time_ms=ms
     )
